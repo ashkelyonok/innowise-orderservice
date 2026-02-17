@@ -83,6 +83,24 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable", ex.getMessage(), request);
     }
 
+    @ExceptionHandler(FeignException.NotFound.class)
+    public ResponseEntity<ErrorResponseDto> handleFeignNotFound(FeignException.NotFound ex, HttpServletRequest request) {
+        log.warn("External resource not found: {}", ex.getMessage());
+        return buildResponse(HttpStatus.NOT_FOUND, "External Resource Not Found", "The requested user or resource was not found in the external service.", request);
+    }
+
+    @ExceptionHandler(FeignException.BadRequest.class)
+    public ResponseEntity<ErrorResponseDto> handleFeignBadRequest(FeignException.BadRequest ex, HttpServletRequest request) {
+        log.warn("Invalid request to external service: {}", ex.getMessage());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Invalid External Request", "The request rejected by the external service due to invalid data.", request);
+    }
+
+    @ExceptionHandler(FeignException.Forbidden.class)
+    public ResponseEntity<ErrorResponseDto> handleFeignForbidden(FeignException.Forbidden ex, HttpServletRequest request) {
+        log.warn("Access denied by external service: {}", ex.getMessage());
+        return buildResponse(HttpStatus.FORBIDDEN, "Access Denied", "You are not allowed to perform operations on this user.", request);
+    }
+
     @ExceptionHandler(FeignException.class)
     public ResponseEntity<ErrorResponseDto> handleFeignException(FeignException ex, HttpServletRequest request) {
         log.error("External Feign Error: Status {} - Body {}", ex.status(), ex.contentUTF8());

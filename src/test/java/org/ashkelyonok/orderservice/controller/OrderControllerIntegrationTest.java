@@ -84,6 +84,87 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Exception: Feign Client 404 (User Not Found)")
+    void createOrder_UserNotFound_Feign404() throws Exception {
+        Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
+
+        stubFor(WireMock.get(urlPathMatching("/api/v1/users/search"))
+                .willReturn(aResponse().withStatus(404)));
+
+        OrderCreateDto dto = new OrderCreateDto();
+        dto.setUserEmail("unknown@test.com");
+        dto.setItems(List.of(new OrderItemCreateDto(item.getId(), 1)));
+
+        String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error", is("External Resource Not Found")));
+    }
+
+    @Test
+    @DisplayName("Exception: Feign Client 400 (Bad Request)")
+    void createOrder_UserBadRequest_Feign400() throws Exception {
+        Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
+
+        stubFor(WireMock.get(urlPathMatching("/api/v1/users/search"))
+                .willReturn(aResponse().withStatus(400)));
+
+        OrderCreateDto dto = new OrderCreateDto();
+        dto.setUserEmail("bad-request@test.com");
+        dto.setItems(List.of(new OrderItemCreateDto(item.getId(), 1)));
+
+        String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("Invalid External Request")));
+    }
+
+    @Test
+    @DisplayName("Exception: Feign Client 503 (Service Unavailable)")
+    void createOrder_UserServiceDown_Feign503() throws Exception {
+        Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
+
+        stubFor(WireMock.get(urlPathMatching("/api/v1/users/search"))
+                .willReturn(aResponse().withStatus(500)));
+
+        OrderCreateDto dto = new OrderCreateDto();
+        dto.setUserEmail("server-error@test.com");
+        dto.setItems(List.of(new OrderItemCreateDto(item.getId(), 1)));
+
+        String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error", is("External Dependency Error")));
+    }
+
+    @Test
+    @DisplayName("Exception: Validation Error (Missing Fields)")
+    void createOrder_ValidationFail() throws Exception {
+        OrderCreateDto dto = new OrderCreateDto();
+
+        String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("Validation Failed")));
+    }
+
+    @Test
     @DisplayName("Get Orders By User ID: Success")
     void getOrdersByUserId_Success() throws Exception {
         Order o1 = new Order();
