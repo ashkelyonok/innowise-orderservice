@@ -12,6 +12,7 @@ import org.ashkelyonok.orderservice.model.dto.request.OrderItemCreateDto;
 import org.ashkelyonok.orderservice.model.dto.request.OrderUpdateStatusDto;
 import org.ashkelyonok.orderservice.model.dto.response.OrderPageResponseDto;
 import org.ashkelyonok.orderservice.model.dto.response.OrderResponseDto;
+import org.ashkelyonok.orderservice.model.dto.response.UserPageResponse;
 import org.ashkelyonok.orderservice.model.dto.response.UserResponseDto;
 import org.ashkelyonok.orderservice.model.entity.Item;
 import org.ashkelyonok.orderservice.model.entity.Order;
@@ -81,6 +82,9 @@ class OrderServiceImplTest {
         userResponse.setId(userId);
         userResponse.setEmail(email);
 
+        org.ashkelyonok.orderservice.model.dto.response.UserPageResponse pageResponse = new org.ashkelyonok.orderservice.model.dto.response.UserPageResponse();
+        pageResponse.setContent(List.of(userResponse));
+
         Item item = new Item();
         item.setId(itemId);
         item.setPrice(BigDecimal.TEN);
@@ -94,9 +98,9 @@ class OrderServiceImplTest {
         responseDto.setId(500L);
         responseDto.setStatus(OrderStatus.CREATED);
 
-        when(userServiceClient.getUserByEmail(email)).thenReturn(userResponse);
+        when(userServiceClient.getUserByEmail(email)).thenReturn(pageResponse);
         doNothing().when(securityUtil).checkOwnership(userId);
-        when(itemRepository.findByIdIn(Set.of(itemId))).thenReturn(List.of(item));
+        when(itemRepository.findByIdInAndDeletedFalse(Set.of(itemId))).thenReturn(List.of(item));
         when(orderMapper.toEntity(createDto)).thenReturn(orderEntity);
         when(orderRepository.save(orderEntity)).thenReturn(orderEntity);
         when(orderMapper.toDto(orderEntity)).thenReturn(responseDto);
@@ -121,23 +125,7 @@ class OrderServiceImplTest {
 
         assertThatThrownBy(() -> orderService.createOrder(createDto))
                 .isInstanceOf(ServiceUnavailableException.class)
-                .hasMessageContaining("User not found");
-    }
-
-    @Test
-    @DisplayName("Create Order: Should throw exception when User ID is null")
-    void createOrder_ShouldThrowException_WhenUserIdIsNull() {
-        OrderCreateDto createDto = new OrderCreateDto();
-        createDto.setUserEmail("test@example.com");
-
-        UserResponseDto userResponse = new UserResponseDto();
-        userResponse.setEmail("test@example.com");
-        userResponse.setId(null);
-
-        when(userServiceClient.getUserByEmail(anyString())).thenReturn(userResponse);
-
-        assertThatThrownBy(() -> orderService.createOrder(createDto))
-                .isInstanceOf(ServiceUnavailableException.class);
+                .hasMessageContaining("User Service unavailable or User not found");
     }
 
     @Test
@@ -152,11 +140,35 @@ class OrderServiceImplTest {
         UserResponseDto userResponse = new UserResponseDto();
         userResponse.setId(1L);
 
-        when(userServiceClient.getUserByEmail(anyString())).thenReturn(userResponse);
-        when(itemRepository.findByIdIn(anySet())).thenReturn(Collections.emptyList());
+        UserPageResponse pageResponse = new UserPageResponse();
+        pageResponse.setContent(List.of(userResponse));
+
+        when(userServiceClient.getUserByEmail(anyString())).thenReturn(pageResponse);
+        when(itemRepository.findByIdInAndDeletedFalse(anySet())).thenReturn(Collections.emptyList());
 
         assertThatThrownBy(() -> orderService.createOrder(createDto))
                 .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("Create Order: Should throw exception when User ID is null")
+    void createOrder_ShouldThrowException_WhenUserIdIsNull() {
+        OrderCreateDto createDto = new OrderCreateDto();
+        createDto.setUserEmail("test@example.com");
+        createDto.setItems(List.of());
+
+        UserResponseDto userResponse = new UserResponseDto();
+        userResponse.setEmail("test@example.com");
+        userResponse.setId(null);
+
+        UserPageResponse pageResponse = new UserPageResponse();
+        pageResponse.setContent(List.of(userResponse));
+
+        when(userServiceClient.getUserByEmail(anyString())).thenReturn(pageResponse);
+        doThrow(new ServiceUnavailableException("User setup failed")).when(securityUtil).checkOwnership(null);
+
+        assertThatThrownBy(() -> orderService.createOrder(createDto))
+                .isInstanceOf(ServiceUnavailableException.class);
     }
 
     @Test
@@ -171,14 +183,18 @@ class OrderServiceImplTest {
 
         UserResponseDto user = new UserResponseDto();
         user.setId(1L);
+
+        UserPageResponse pageResponse = new UserPageResponse();
+        pageResponse.setContent(List.of(user));
+
         Item item = new Item();
         item.setId(1L);
         item.setPrice(BigDecimal.ONE);
         Order order = new Order();
         order.setId(1L);
 
-        when(userServiceClient.getUserByEmail(anyString())).thenReturn(user);
-        when(itemRepository.findByIdIn(anySet())).thenReturn(List.of(item));
+        when(userServiceClient.getUserByEmail(anyString())).thenReturn(pageResponse);
+        when(itemRepository.findByIdInAndDeletedFalse(anySet())).thenReturn(List.of(item));
         when(orderMapper.toEntity(any())).thenReturn(order);
         when(orderRepository.save(any())).thenReturn(order);
         when(orderMapper.toDto(any())).thenReturn(new OrderResponseDto());
@@ -232,7 +248,7 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdAndDeletedFalse(id)).thenReturn(Optional.of(order));
         doNothing().when(securityUtil).checkOwnership(100L);
         when(orderMapper.toDto(order)).thenReturn(dto);
-        when(userServiceClient.getUserById(anyLong())).thenThrow(new RuntimeException("Service Down"));
+        when(userServiceClient.getUserById(anyLong())).thenReturn(null);
 
         OrderResponseDto result = orderService.getOrderById(id);
 
@@ -341,7 +357,7 @@ class OrderServiceImplTest {
         order.setId(id);
         order.setStatus(OrderStatus.CREATED);
 
-        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdAndDeletedFalse(id)).thenReturn(Optional.of(order));
 
         orderService.updateOrderStatusByPayment(id, "SUCCESS");
 
@@ -357,11 +373,11 @@ class OrderServiceImplTest {
         order.setId(id);
         order.setStatus(OrderStatus.CREATED);
 
-        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdAndDeletedFalse(id)).thenReturn(Optional.of(order));
 
         orderService.updateOrderStatusByPayment(id, "FAILED");
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED); // Unchanged
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED);
         verify(orderRepository).save(order);
     }
 
@@ -373,18 +389,18 @@ class OrderServiceImplTest {
         order.setId(id);
         order.setStatus(OrderStatus.CREATED);
 
-        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdAndDeletedFalse(id)).thenReturn(Optional.of(order));
 
         orderService.updateOrderStatusByPayment(id, "UNKNOWN_STATUS");
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED); // Should remain unchanged
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED);
         verify(orderRepository).save(order);
     }
 
     @Test
     @DisplayName("Payment Update: Should throw exception when Order Not Found")
     void updateOrderStatusByPayment_ShouldThrowException_WhenNotFound() {
-        when(orderRepository.findById(99L)).thenReturn(Optional.empty());
+        when(orderRepository.findByIdAndDeletedFalse(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderService.updateOrderStatusByPayment(99L, "SUCCESS"))
                 .isInstanceOf(OrderNotFoundException.class);
@@ -440,7 +456,7 @@ class OrderServiceImplTest {
     @Test
     @DisplayName("Delete Order: Should soft delete when order exists")
     void deleteOrder_ShouldSoftDelete_WhenExists() {
-        when(orderRepository.existsById(1L)).thenReturn(true);
+        when(orderRepository.softDeleteById(1L)).thenReturn(1);
 
         orderService.deleteOrder(1L);
 
@@ -450,7 +466,8 @@ class OrderServiceImplTest {
     @Test
     @DisplayName("Delete Order: Should throw exception when order does not exist")
     void deleteOrder_ShouldThrowException_WhenNotFound() {
-        when(orderRepository.existsById(1L)).thenReturn(false);
+        when(orderRepository.softDeleteById(1L)).thenReturn(0);
+
         assertThatThrownBy(() -> orderService.deleteOrder(1L))
                 .isInstanceOf(OrderNotFoundException.class);
     }

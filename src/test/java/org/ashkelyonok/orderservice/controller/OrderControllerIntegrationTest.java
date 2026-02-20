@@ -15,6 +15,8 @@ import org.ashkelyonok.orderservice.repository.OrderRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -54,15 +56,15 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Create Order: Full Flow")
     void createOrder_ShouldSucceed() throws Exception {
-        Item item = itemRepository.save(new Item(null, "RTX 4090", new BigDecimal("1500.00"), LocalDateTime.now(), LocalDateTime.now()));
+        Item item = itemRepository.save(new Item(null, "RTX 4090", new BigDecimal("1500.00"), LocalDateTime.now(), LocalDateTime.now(), false));
 
-        stubFor(WireMock.get(urlPathMatching("/api/v1/users/search"))
+        stubFor(WireMock.get(urlPathMatching("/api/v1/users"))
                 .withQueryParam("email", matching(".*"))
                 .willReturn(aResponse()
                         .withHeader("Content-Type", "application/json")
                         .withStatus(200)
                         .withBody("""
-                            { "id": 101, "email": "lanelloyd@gmail.com", "name": "Lane", "surname": "Lloyd" }
+                            { "content": [ { "id": 101, "email": "lanelloyd@gmail.com", "name": "Lane", "surname": "Lloyd" } ] }
                         """)));
 
         OrderCreateDto dto = new OrderCreateDto();
@@ -83,60 +85,20 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.totalPrice", is(3000.00)));
     }
 
-    @Test
-    @DisplayName("Exception: Feign Client 404 (User Not Found)")
-    void createOrder_UserNotFound_Feign404() throws Exception {
-        Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
+    @ParameterizedTest(name = "Exception: Feign Client {0} ({1})")
+    @CsvSource({
+            "404, unknown@test.com",
+            "400, bad-request@test.com",
+            "500, server-error@test.com"
+    })
+    void createOrder_ExternalUserServiceFails_ShouldReturn503(int wireMockStatus, String email) throws Exception {
+        Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now(), false));
 
-        stubFor(WireMock.get(urlPathMatching("/api/v1/users/search"))
-                .willReturn(aResponse().withStatus(404)));
-
-        OrderCreateDto dto = new OrderCreateDto();
-        dto.setUserEmail("unknown@test.com");
-        dto.setItems(List.of(new OrderItemCreateDto(item.getId(), 1)));
-
-        String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
-                        .header("Authorization", token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error", is("External Resource Not Found")));
-    }
-
-    @Test
-    @DisplayName("Exception: Feign Client 400 (Bad Request)")
-    void createOrder_UserBadRequest_Feign400() throws Exception {
-        Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
-
-        stubFor(WireMock.get(urlPathMatching("/api/v1/users/search"))
-                .willReturn(aResponse().withStatus(400)));
+        stubFor(WireMock.get(urlPathMatching("/api/v1/users"))
+                .willReturn(aResponse().withStatus(wireMockStatus)));
 
         OrderCreateDto dto = new OrderCreateDto();
-        dto.setUserEmail("bad-request@test.com");
-        dto.setItems(List.of(new OrderItemCreateDto(item.getId(), 1)));
-
-        String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
-                        .header("Authorization", token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error", is("Invalid External Request")));
-    }
-
-    @Test
-    @DisplayName("Exception: Feign Client 503 (Service Unavailable)")
-    void createOrder_UserServiceDown_Feign503() throws Exception {
-        Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
-
-        stubFor(WireMock.get(urlPathMatching("/api/v1/users/search"))
-                .willReturn(aResponse().withStatus(500)));
-
-        OrderCreateDto dto = new OrderCreateDto();
-        dto.setUserEmail("server-error@test.com");
+        dto.setUserEmail(email);
         dto.setItems(List.of(new OrderItemCreateDto(item.getId(), 1)));
 
         String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
@@ -146,7 +108,7 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.error", is("External Dependency Error")));
+                .andExpect(jsonPath("$.error", is("Service Unavailable")));
     }
 
     @Test
@@ -187,7 +149,7 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
 
         String token = generateTestToken(101L, "user@test.com", "ROLE_USER");
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/orders/user/101")
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/orders/users/101")
                         .header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(2)))
@@ -217,7 +179,7 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
 
         String token = generateTestToken(101L, "user@test.com", "ROLE_USER");
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/orders/user/101")
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/orders/users/101")
                         .header("Authorization", token)
                         .param("statuses", "PAID"))
                 .andExpect(status().isOk())
@@ -230,7 +192,7 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
     void getOrdersByUserId_ShouldReturnForbidden_WhenUserIsNotOwner() throws Exception {
         String token = generateTestToken(101L, "user@test.com", "ROLE_USER");
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/orders/user/202")
+        mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/orders/users/202")
                         .header("Authorization", token))
                 .andExpect(status().isForbidden());
     }
@@ -310,7 +272,7 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
 
         String token = generateTestToken(1L, "admin@test.com", "ROLE_ADMIN");
 
-        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/orders/" + order.getId() + "/status")
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/orders/" + order.getId())
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
@@ -332,7 +294,7 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
 
         String token = generateTestToken(1L, "admin@test.com", "ROLE_ADMIN");
 
-        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/orders/" + order.getId() + "/status")
+        mockMvc.perform(MockMvcRequestBuilders.patch("/api/v1/orders/" + order.getId())
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))

@@ -65,7 +65,7 @@ public class OrderController implements OrderControllerApi {
     }
 
     @Override
-    @GetMapping("/user/{userId}")
+    @GetMapping("/users/{userId}")
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<OrderPageResponseDto> getOrdersByUserId(
             @PathVariable Long userId,
@@ -78,7 +78,7 @@ public class OrderController implements OrderControllerApi {
     }
 
     @Override
-    @PatchMapping("/{id}/status")
+    @PatchMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<OrderResponseDto> updateOrderStatus(
             @PathVariable Long id,

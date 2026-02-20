@@ -20,9 +20,9 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -74,8 +74,8 @@ class ItemControllerIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Get Items: Success with Pagination and Filtering")
     void getItems_WithFilter() throws Exception {
-        itemRepository.save(new Item(null, "Apple iPhone", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
-        itemRepository.save(new Item(null, "Samsung Galaxy", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
+        itemRepository.save(new Item(null, "Apple iPhone", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now(), false));
+        itemRepository.save(new Item(null, "Samsung Galaxy", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now(), false));
 
         String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
 
@@ -92,7 +92,7 @@ class ItemControllerIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Get Item By ID: Success (200)")
     void getItemById_Success() throws Exception {
-        Item item = itemRepository.save(new Item(null, "Existing Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now()));
+        Item item = itemRepository.save(new Item(null, "Existing Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now(), false));
         String token = generateTestToken(2L, "user@test.com", "ROLE_USER");
 
         mockMvc.perform(get("/api/v1/items/" + item.getId())
@@ -114,14 +114,14 @@ class ItemControllerIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Update Item: Success (200)")
     void updateItem_Success() throws Exception {
-        Item saved = itemRepository.save(new Item(null, "Old Name", BigDecimal.ONE, LocalDateTime.now(), LocalDateTime.now()));
+        Item saved = itemRepository.save(new Item(null, "Old Name", BigDecimal.ONE, LocalDateTime.now(), LocalDateTime.now(), false));
         String token = generateTestToken(1L, "admin@test.com", "ROLE_ADMIN");
 
         ItemUpdateDto updateDto = new ItemUpdateDto();
         updateDto.setName("New Name");
         updateDto.setPrice(BigDecimal.TEN);
 
-        mockMvc.perform(put("/api/v1/items/" + saved.getId())
+        mockMvc.perform(patch("/api/v1/items/" + saved.getId())
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateDto)))
@@ -137,7 +137,7 @@ class ItemControllerIntegrationTest extends AbstractIntegrationTest {
         updateDto.setName("New Name");
         updateDto.setPrice(BigDecimal.TEN);
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/items/99999")
+        mockMvc.perform(patch("/api/v1/items/99999")
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateDto)))
@@ -147,14 +147,14 @@ class ItemControllerIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Delete Item: Success (204)")
     void deleteItem_Success() throws Exception {
-        Item saved = itemRepository.save(new Item(null, "Delete Me", BigDecimal.ONE, LocalDateTime.now(), LocalDateTime.now()));
+        Item saved = itemRepository.save(new Item(null, "Delete Me", BigDecimal.ONE, LocalDateTime.now(), LocalDateTime.now(), false));
         String token = generateTestToken(1L, "admin@test.com", "ROLE_ADMIN");
 
         mockMvc.perform(delete("/api/v1/items/" + saved.getId())
                         .header("Authorization", token))
                 .andExpect(status().isNoContent());
 
-        assertThat(itemRepository.existsById(saved.getId())).isFalse();
+        assertThat(itemRepository.findByIdAndDeletedFalse(saved.getId())).isEmpty();
     }
 
     @Test

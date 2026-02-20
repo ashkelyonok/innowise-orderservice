@@ -43,15 +43,16 @@ public class ItemServiceImpl implements ItemService {
         log.debug("Fetching items page {} with filter name='{}'", pageable.getPageNumber(), name);
 
         Specification<Item> spec = SpecificationBuilder.likeIgnoreCase("name", name);
+        Specification<Item> notDeleted = (root, query, cb) -> cb.isFalse(root.get("deleted"));
 
-        return itemRepository.findAll(spec, pageable)
+        return itemRepository.findAll(spec.and(notDeleted), pageable)
                 .map(itemMapper::toDto);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ItemResponseDto getItemById(Long id) {
-        return itemRepository.findById(id)
+        return itemRepository.findByIdAndDeletedFalse(id)
                 .map(itemMapper::toDto)
                 .orElseThrow(() -> new ItemNotFoundException(id));
     }
@@ -60,7 +61,7 @@ public class ItemServiceImpl implements ItemService {
     public ItemResponseDto updateItem(Long id, ItemUpdateDto dto) {
         log.info("Updating item with ID: {}", id);
 
-        Item item = itemRepository.findById(id)
+        Item item = itemRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ItemNotFoundException(id));
 
         itemMapper.updateItemFromDto(dto, item);
@@ -72,9 +73,12 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public void deleteItem(Long id) {
         log.info("Deleting item with ID: {}", id);
-        if (!itemRepository.existsById(id)) {
+
+        int rows = itemRepository.softDeleteById(id);
+
+        if (rows == 0) {
             throw new ItemNotFoundException(id);
         }
-        itemRepository.deleteById(id);
+        log.info("Item {} soft deleted", id);
     }
 }

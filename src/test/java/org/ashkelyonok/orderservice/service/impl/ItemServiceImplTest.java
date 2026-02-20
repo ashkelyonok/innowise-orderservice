@@ -111,7 +111,7 @@ class ItemServiceImplTest {
         responseDto.setId(itemId);
         responseDto.setName("Item");
 
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(itemRepository.findByIdAndDeletedFalse(itemId)).thenReturn(Optional.of(item));
         when(itemMapper.toDto(item)).thenReturn(responseDto);
 
         ItemResponseDto result = itemService.getItemById(itemId);
@@ -124,7 +124,7 @@ class ItemServiceImplTest {
     @DisplayName("Get Item By ID: Should throw exception when ID does not exist")
     void getItemById_ShouldThrowException_WhenIdDoesNotExist() {
         Long itemId = 99L;
-        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+        when(itemRepository.findByIdAndDeletedFalse(itemId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> itemService.getItemById(itemId))
                 .isInstanceOf(ItemNotFoundException.class);
@@ -151,7 +151,7 @@ class ItemServiceImplTest {
         responseDto.setName("New Name");
         responseDto.setPrice(BigDecimal.valueOf(200));
 
-        when(itemRepository.findById(itemId)).thenReturn(Optional.of(existingItem));
+        when(itemRepository.findByIdAndDeletedFalse(itemId)).thenReturn(Optional.of(existingItem));
         when(itemRepository.save(existingItem)).thenReturn(savedItem);
         when(itemMapper.toDto(savedItem)).thenReturn(responseDto);
 
@@ -168,7 +168,7 @@ class ItemServiceImplTest {
     void updateItem_ShouldThrowException_WhenItemNotFound() {
         Long itemId = 99L;
         ItemUpdateDto updateDto = new ItemUpdateDto();
-        when(itemRepository.findById(itemId)).thenReturn(Optional.empty());
+        when(itemRepository.findByIdAndDeletedFalse(itemId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> itemService.updateItem(itemId, updateDto))
                 .isInstanceOf(ItemNotFoundException.class);
@@ -180,22 +180,20 @@ class ItemServiceImplTest {
     @DisplayName("Delete Item: Should verify deletion when item exists")
     void deleteItem_ShouldDelete_WhenItemExists() {
         Long itemId = 1L;
-        when(itemRepository.existsById(itemId)).thenReturn(true);
+        when(itemRepository.softDeleteById(itemId)).thenReturn(1);
 
         itemService.deleteItem(itemId);
 
-        verify(itemRepository).deleteById(itemId);
+        verify(itemRepository).softDeleteById(itemId);
     }
 
     @Test
     @DisplayName("Delete Item: Should throw exception when item does not exist")
     void deleteItem_ShouldThrowException_WhenItemDoesNotExist() {
         Long itemId = 99L;
-        when(itemRepository.existsById(itemId)).thenReturn(false);
+        when(itemRepository.softDeleteById(itemId)).thenReturn(0);
 
         assertThatThrownBy(() -> itemService.deleteItem(itemId))
                 .isInstanceOf(ItemNotFoundException.class);
-
-        verify(itemRepository, never()).deleteById(any());
     }
 }

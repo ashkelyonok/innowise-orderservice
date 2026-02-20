@@ -17,5 +17,5 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
     @Modifying
     @Query("UPDATE Order o SET o.deleted = true, o.updatedAt = CURRENT_TIMESTAMP WHERE o.id = :id")
-    void softDeleteById(@Param("id") Long id);
+    int softDeleteById(@Param("id") Long id);
 }

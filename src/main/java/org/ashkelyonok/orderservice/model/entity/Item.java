@@ -49,4 +49,8 @@ public class Item {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean deleted = false;
 }
