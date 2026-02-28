@@ -1,0 +1,60 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: OrderService
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${POSTGRES_DB:order_db}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+
+jwt:
+  secret: ${JWT_SECRET}
+
+application:
+  kafka:
+    consumer-group-id: order-service-group
+    topic:
+      order-created: order-created-topic
+      payment-status: payment-status-topic
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      userService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info

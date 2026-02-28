@@ -1,0 +1,16 @@
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:order-db}:5432/${POSTGRES_DB:order_db}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+
+  kafka:
+    bootstrap-servers: kafka:29092
+
+application:
+  config:
+    user-service-url: ${USER_SERVICE_URL:http://user-service:8081}

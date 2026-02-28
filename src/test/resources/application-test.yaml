@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: OrderServiceTest
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+jwt:
+  secret: U2VjcmV0S2V5Rm9yVGVzdGluZ1B1cnBvc2VzT25seTEyMzQ1Njc4OTA=
+  expiration: 900000
+
+application:
+  config:
+    user-service-url: http://localhost:${wiremock.server.port}
+
+  kafka:
+    consumer-group-id: order-service-test-group
+    topic:
+      order-created: order-created-test-topic
+      payment-status: payment-status-topic
+
+logging:
+  level:
+    root: INFO
+    org.ashkelyonok: DEBUG
+    org.testcontainers: INFO
+    org.apache.kafka: WARN
