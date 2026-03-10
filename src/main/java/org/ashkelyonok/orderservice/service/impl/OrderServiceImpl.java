@@ -6,6 +6,7 @@ import org.ashkelyonok.orderservice.client.UserServiceClient;
 import org.ashkelyonok.orderservice.exception.InvalidOrderOperationException;
 import org.ashkelyonok.orderservice.exception.ItemNotFoundException;
 import org.ashkelyonok.orderservice.exception.OrderNotFoundException;
+import org.ashkelyonok.orderservice.exception.ResourceNotFoundException;
 import org.ashkelyonok.orderservice.exception.ServiceUnavailableException;
 import org.ashkelyonok.orderservice.kafka.producer.OrderEventProducer;
 import org.ashkelyonok.orderservice.mapper.OrderMapper;
@@ -179,10 +180,16 @@ public class OrderServiceImpl implements OrderService {
     private UserResponseDto resolveUser(String email) {
         UserPageResponse page = userServiceClient.getUserByEmail(email);
 
-        if (page == null || page.getContent() == null || page.getContent().isEmpty()) {
-            log.error("User resolution failed for email: {}", email);
-            throw new ServiceUnavailableException("Cannot create order: User Service unavailable or User not found.");
+        if (page == null) {
+            log.error("User Service fallback returned null for email: {}", email);
+            throw new ServiceUnavailableException("Cannot create order: User Service is currently unavailable.");
         }
+
+        if (page.getContent() == null || page.getContent().isEmpty()) {
+            log.error("User not found for email: {}", email);
+            throw new ResourceNotFoundException("User not found with email: " + email);
+        }
+
         return page.getContent().getFirst();
     }
 

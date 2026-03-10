@@ -116,16 +116,33 @@ class OrderServiceImplTest {
     }
 
     @Test
-    @DisplayName("Create Order: Should throw ServiceUnavailableException when user not found")
-    void createOrder_ShouldThrowException_WhenUserNotFound() {
+    @DisplayName("Create Order: Should throw ServiceUnavailableException when User Service is offline")
+    void createOrder_ShouldThrowException_WhenUserServiceIsOffline() {
         OrderCreateDto createDto = new OrderCreateDto();
-        createDto.setUserEmail("unknown@example.com");
+        createDto.setUserEmail("test@example.com");
 
         when(userServiceClient.getUserByEmail(anyString())).thenReturn(null);
 
         assertThatThrownBy(() -> orderService.createOrder(createDto))
                 .isInstanceOf(ServiceUnavailableException.class)
-                .hasMessageContaining("User Service unavailable or User not found");
+                .hasMessageContaining("Cannot create order: User Service is currently unavailable.");
+    }
+
+    @Test
+    @DisplayName("Create Order: Should throw ResourceNotFoundException when user does not exist")
+    void createOrder_ShouldThrowException_WhenUserEmailDoesNotExist() {
+        String email = "nonexistent@example.com";
+        OrderCreateDto createDto = new OrderCreateDto();
+        createDto.setUserEmail(email);
+
+        UserPageResponse emptyPage = new UserPageResponse();
+        emptyPage.setContent(java.util.Collections.emptyList());
+
+        when(userServiceClient.getUserByEmail(email)).thenReturn(emptyPage);
+
+        assertThatThrownBy(() -> orderService.createOrder(createDto))
+                .isInstanceOf(org.ashkelyonok.orderservice.exception.ResourceNotFoundException.class)
+                .hasMessageContaining("User not found with email: " + email);
     }
 
     @Test
