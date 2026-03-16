@@ -85,13 +85,13 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.totalPrice", is(3000.00)));
     }
 
-    @ParameterizedTest(name = "Exception: Feign Client {0} ({1})")
+    @ParameterizedTest(name = "External User Service returns {0} for email {1}")
     @CsvSource({
             "404, unknown@test.com",
             "400, bad-request@test.com",
             "500, server-error@test.com"
     })
-    void createOrder_ExternalUserServiceFails_ShouldReturn503(int wireMockStatus, String email) throws Exception {
+    void createOrder_ExternalUserServiceFails_ShouldReturnAppropriateStatus(int wireMockStatus, String email) throws Exception {
         Item item = itemRepository.save(new Item(null, "Item", BigDecimal.TEN, LocalDateTime.now(), LocalDateTime.now(), false));
 
         stubFor(WireMock.get(urlPathMatching("/api/v1/users"))
@@ -103,12 +103,22 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
 
         String token = generateTestToken(1L, "user@test.com", "ROLE_USER");
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
-                        .header("Authorization", token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.error", is("Service Unavailable")));
+        var request = mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/orders")
+                .header("Authorization", token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)));
+
+        switch (wireMockStatus) {
+            case 404 -> request
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error", is("External Resource Not Found")));
+            case 400 -> request
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error", is("Invalid External Request")));
+            default -> request
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.error", is("Service Unavailable")));
+        }
     }
 
     @Test
@@ -247,6 +257,12 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
         noMatch.setCreatedAt(LocalDateTime.now().minusDays(10));
         orderRepository.save(noMatch);
 
+        stubFor(WireMock.get(urlPathMatching("/api/v1/users/1"))
+                .willReturn(aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withStatus(200)
+                        .withBody("{ \"id\": 1, \"name\": \"Admin User\" }")));
+
         String token = generateTestToken(1L, "admin@test.com", "ROLE_ADMIN");
 
         mockMvc.perform(MockMvcRequestBuilders.get("/api/v1/orders")
@@ -266,6 +282,12 @@ class OrderControllerIntegrationTest extends AbstractIntegrationTest {
         order.setStatus(OrderStatus.CREATED);
         order.setTotalPrice(BigDecimal.TEN);
         order = orderRepository.save(order);
+
+        stubFor(WireMock.get(urlPathMatching("/api/v1/users/1"))
+                .willReturn(aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withStatus(200)
+                        .withBody("{ \"id\": 1, \"name\": \"Admin User\" }")));
 
         OrderUpdateStatusDto dto = new OrderUpdateStatusDto();
         dto.setStatus(OrderStatus.SHIPPED);
