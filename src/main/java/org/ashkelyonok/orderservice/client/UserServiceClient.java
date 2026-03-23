@@ -1,6 +1,6 @@
 package org.ashkelyonok.orderservice.client;
 
-import org.ashkelyonok.orderservice.client.fallback.UserServiceFallback;
+import org.ashkelyonok.orderservice.client.fallback.UserServiceFallbackFactory;
 import org.ashkelyonok.orderservice.config.FeignConfig;
 import org.ashkelyonok.orderservice.model.dto.response.UserPageResponse;
 import org.ashkelyonok.orderservice.model.dto.response.UserResponseDto;
@@ -14,7 +14,7 @@ import java.util.Set;
 @FeignClient(
         name = "user-service",
         url = "${application.config.user-service-url}",
-        fallback = UserServiceFallback.class,
+        fallbackFactory = UserServiceFallbackFactory.class,
         configuration = FeignConfig.class
 )
 public interface UserServiceClient {
